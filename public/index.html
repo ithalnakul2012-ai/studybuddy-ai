@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyBuddy AI</title>
+    <!-- Modern font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Highlight.js for code formatting (Local Vendor) -->
+    <link rel="stylesheet" href="css/vendor/github.min.css" id="hljs-light-theme">
+    <link rel="stylesheet" href="css/vendor/github-dark.min.css" id="hljs-dark-theme" disabled>
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- External Libs (Local Vendor) -->
+    <script src="vendor/marked.min.js"></script>
+    <script src="vendor/purify.min.js"></script>
+    <script src="vendor/highlight.min.js"></script>
+    <script src="vendor/jspdf.umd.min.js"></script>
+</head>
+<body class="light-mode">
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>StudyBuddy AI</h2>
+            </div>
+            <button id="new-chat-btn" class="btn primary-btn">+ New Chat</button>
+            
+            <div class="sessions-label">Recent Chats</div>
+            <div id="sessions-list" class="sessions-list"></div>
+
+            <div class="sidebar-footer">
+                <button id="talk-mode-btn" class="btn icon-btn" title="Talk Mode">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                    <span>Talk Mode</span>
+                </button>
+                <button id="pomodoro-btn" class="btn icon-btn" title="Pomodoro Timer">
+                    ⏱ <span>Pomodoro Timer</span>
+                </button>
+                <button id="theme-toggle-btn" class="btn icon-btn" title="Toggle Theme">
+                    <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                </button>
+                <button id="settings-btn" class="btn icon-btn" title="Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <header class="chat-header">
+                <div class="header-left">
+                    <button id="mobile-menu-btn" class="btn icon-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
+                    <h2>StudyBuddy AI <span id="demo-badge" class="demo-badge" style="display: none;">Demo Mode</span></h2>
+                </div>
+                <div class="header-actions">
+                    <button id="header-settings-btn" class="btn icon-btn" title="Settings">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    </button>
+                </div>
+            </header>
+
+            <div id="chat-container" class="chat-messages">
+                <div id="welcome-screen" class="welcome-screen">
+                    <div class="welcome-icon">🎓</div>
+                    <h1>Hello! I'm your StudyBuddy.</h1>
+                    <p>I can help you with math, science, summarizing notes, or generate images.</p>
+                    <div id="suggested-prompts" class="suggested-prompts">
+                        <!-- Prompts will be generated dynamically by app.js -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <button id="voice-btn" class="btn voice-btn" title="Hold to speak">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                    </button>
+                    <textarea id="message-input" placeholder="Ask a question... (Shift+Enter for new line)" rows="1" autofocus></textarea>
+                    <button id="stop-btn" class="btn stop-btn" title="Stop generating" style="display: none; margin-bottom: 4px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect></svg>
+                    </button>
+                    <button id="send-btn" class="btn send-btn" title="Send" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </div>
+                <div class="input-footer">
+                    💡 Tip: Type /image [description] to generate an image | AI can make mistakes.
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button id="close-settings-btn" class="btn icon-btn close-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="status-group">
+                    <div class="status-item">
+                        <span>Live AI:</span>
+                        <span id="chat-status" class="status-badge checking">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Image Generation:</span>
+                        <span id="image-status" class="status-badge checking">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Mode:</span>
+                        <span id="app-mode" class="status-badge checking">Checking...</span>
+                    </div>
+                </div>
+                <div id="settings-message" class="settings-message"></div>
+                <div class="setup-hint" style="margin-top: 1.5rem; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+                    💡 <strong>How to configure:</strong> Edit the <code>.env</code> file in the project root with your API keys and restart the server. 
+                    Frontend keys are no longer supported for security.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Rest of the modals and scripts -->
+    <div id="pomodoro-modal" class="modal">
+        <!-- ... existing pomodoro content ... -->
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⏱ Pomodoro Timer</h3>
+                <button id="close-pomodoro-btn" class="btn icon-btn close-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body" style="text-align: center;">
+                <div id="pomodoro-mode-label" class="pomodoro-mode-label">🎯 Focus Time</div>
+                <div id="pomodoro-display" class="pomodoro-display">
+                    <span class="pomodoro-time-text">25:00</span>
+                </div>
+                <div class="pomodoro-controls">
+                    <button id="pomodoro-start-btn" class="btn primary-btn" style="width: auto; padding: 0.6rem 1.5rem;">Start</button>
+                    <button id="pomodoro-reset-btn" class="btn icon-btn" style="padding: 0.6rem 1rem;">Reset</button>
+                </div>
+                <div class="pomodoro-sessions-info">
+                    <span id="pomodoro-sessions-count">Sessions completed: 0</span>
+                </div>
+                <div class="pomodoro-type-btns">
+                    <button class="pomodoro-type-btn active" data-minutes="25" data-mode="🎯 Focus Time">Focus 25m</button>
+                    <button class="pomodoro-type-btn" data-minutes="5" data-mode="☕ Short Break">Break 5m</button>
+                    <button class="pomodoro-type-btn" data-minutes="15" data-mode="🛋 Long Break">Long Break 15m</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="talk-mode-overlay" class="talk-mode-overlay" style="display:none;">
+        <div class="talk-mode-modal">
+            <div class="talk-mode-header">
+                <div class="talk-mode-title">
+                    <span class="pulse-dot"></span>
+                    StudyBuddy Talk
+                </div>
+                <button id="talk-mode-close-btn" class="talk-mode-close-btn">✕</button>
+            </div>
+            <div class="talk-mode-center">
+                <div id="talk-mode-avatar" class="talk-mode-avatar idle">
+                    <div class="orb-container">
+                        <div class="orb-layer layer-1"></div>
+                        <div class="orb-layer layer-2"></div>
+                        <div class="orb-layer layer-3"></div>
+                        <div class="orb-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                        </div>
+                    </div>
+                </div>
+                <div id="talk-mode-status" class="talk-mode-status">Hold the mic to speak</div>
+                <div id="talk-mode-transcript" class="talk-mode-transcript"></div>
+            </div>
+            <div class="talk-mode-footer">
+                <div class="tts-settings">
+                    <span id="tts-rate-value">1.0x</span>
+                    <input type="range" id="tts-rate-slider" min="0.5" max="2" step="0.1" value="1" class="tts-slider">
+                    <button id="tts-stop-btn" class="tts-stop-btn" title="Stop Speaking">⏹</button>
+                </div>
+                <button id="talk-mic-btn" class="talk-mic-btn idle">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                </button>
+                <div class="talk-mode-hint">Push to talk • release to send</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/app.js"></script>
+</body>
+</html>
