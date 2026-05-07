@@ -27,7 +27,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/status', (req, res) => {
     res.json({
         chatConfigured: !!process.env.GROQ_API_KEY,
-        imageConfigured: true,
+        imageConfigured: !!process.env.HF_TOKEN,
         publicImageFallbackEnabled: process.env.ENABLE_PUBLIC_IMAGE_FALLBACK === 'true'
     });
 });
