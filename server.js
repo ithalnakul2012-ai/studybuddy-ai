@@ -27,8 +27,23 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/status', (req, res) => {
     res.json({
         chatConfigured: !!process.env.GROQ_API_KEY,
-        imageConfigured: !!process.env.HF_TOKEN,
+        imageConfigured: true,
         publicImageFallbackEnabled: process.env.ENABLE_PUBLIC_IMAGE_FALLBACK === 'true'
+    });
+});
+
+// GET /api/config - Provide Firebase public config
+app.get('/api/config', (req, res) => {
+    res.json({
+        firebase: {
+            apiKey: process.env.FIREBASE_API_KEY,
+            authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+            messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+            appId: process.env.FIREBASE_APP_ID,
+            measurementId: process.env.FIREBASE_MEASUREMENT_ID
+        }
     });
 });
 
@@ -89,54 +104,21 @@ app.post('/api/chat', limiter, async (req, res) => {
     }
 });
 
-// POST /api/image - Proxy to Hugging Face
+// POST /api/image - Generate image via pollinations.ai (free, no API key required)
 app.post('/api/image', limiter, async (req, res) => {
     const { prompt } = req.body;
 
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
-    // Safety guard
     if (isUnsafePrompt(prompt)) {
         return res.status(403).json({ error: 'The prompt contains restricted content.' });
     }
 
-    if (!process.env.HF_TOKEN) {
-        return res.json({
-            mode: 'unavailable',
-            message: 'Image generation is not configured on this server.'
-        });
-    }
-
-    const controller = new AbortController();
-    req.on('close', () => controller.abort());
-
     try {
-        const response = await fetch('https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.HF_TOKEN}`,
-                'Content-Type': 'application/json',
-                'x-wait-for-model': 'true'
-            },
-            body: JSON.stringify({
-                inputs: prompt,
-                parameters: { num_inference_steps: 8, guidance_scale: 3.5, width: 1024, height: 1024 }
-            }),
-            signal: controller.signal
-        });
-
-        if (!response.ok) {
-            return res.status(response.status).json({ error: 'Image generation failed' });
-        }
-
-        const buffer = await response.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString('base64');
-        res.json({
-            mode: 'live',
-            imageUrl: `data:image/png;base64,${base64}`
-        });
+        const seed = Date.now();
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&enhance=true&seed=${seed}`;
+        res.json({ mode: 'pollinations', imageUrl });
     } catch (error) {
-        if (error.name === 'AbortError') return;
         console.error('Image error:', error);
         res.status(500).json({ error: 'Image generation failed' });
     }

@@ -1,7 +1,294 @@
+// --- SECTION 0 — FIREBASE SETUP ---
+// Firebase is loaded via script tags in HTML
+// Functions are available as firebase.initializeApp, firebase.getAuth, etc.
+
+let firebaseApp, auth, db;
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+async function initFirebase() {
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        
+        console.log("Firebase Config Received:", config.firebase);
+
+        if (!config.firebase || !config.firebase.apiKey) {
+            console.warn("Firebase not configured in .env. Authentication and History Board will be disabled.");
+            return;
+        }
+
+        firebaseApp = firebase.initializeApp(config.firebase);
+        auth = firebase.getAuth(firebaseApp);
+        db = firebase.getFirestore(firebaseApp);
+
+        firebase.auth.onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                state.user = {
+                    uid: user.uid,
+                    displayName: user.displayName,
+                    photoURL: user.photoURL
+                };
+                updateUserUI(true);
+                fetchUserHistory();
+                await initUserStats();
+            } else {
+                state.user = null;
+                // Favor local guest stats if not logged in
+                const savedStats = localStorage.getItem('studybuddy_guest_stats');
+                if (savedStats) {
+                    state.userStats = JSON.parse(savedStats);
+                } else {
+                    state.userStats = {
+                        totalXP: 0,
+                        totalKP: 0,
+                        questionsAsked: 0,
+                        quizzesCompleted: 0,
+                        level: 1,
+                        masteryData: {}
+                    };
+                }
+                updateUserUI(false);
+                updateStatsUI();
+            }
+        });
+    } catch (e) {
+        console.error("Firebase init failed", e);
+        state.userStats = {
+            totalXP: 0,
+            totalKP: 0,
+            questionsAsked: 0,
+            quizzesCompleted: 0,
+            level: 1,
+            masteryData: {}
+        };
+        updateStatsUI();
+    }
+}
+
+async function loginWithGoogle() {
+    if (!auth) return alert("Firebase not initialized. Check your .env config.");
+    try {
+        await firebase.auth.signInWithPopup(auth, googleProvider);
+    } catch (error) {
+        console.error("Login failed", error);
+        alert("Login failed: " + error.message);
+    }
+}
+
+async function saveToHistory(topic, content) {
+    if (!db || !state.user) return;
+    try {
+        await firebase.firestore.addDoc(firebase.firestore.collection(db, 'user_history'), {
+            user_uid: state.user.uid,
+            timestamp: firebase.firestore.serverTimestamp(),
+            topic: topic,
+            content: content
+        });
+        fetchUserHistory();
+    } catch (e) {
+        console.error("Error saving to history", e);
+    }
+}
+
+async function initUserStats() {
+    if (!db || !state.user) return;
+    try {
+        const userDocRef = firebase.firestore.doc(db, 'users', state.user.uid);
+        const userDoc = await firebase.firestore.getDoc(userDocRef);
+        
+        if (userDoc.exists() && userDoc.data().stats) {
+            state.userStats = userDoc.data().stats;
+        } else {
+            // Initialize new user stats
+            const initialStats = {
+                totalXP: 0,
+                totalKP: 0,
+                questionsAsked: 0,
+                quizzesCompleted: 0,
+                level: 1,
+                masteryData: {}
+            };
+            await firebase.firestore.setDoc(userDocRef, { stats: initialStats }, { merge: true });
+            state.userStats = initialStats;
+        }
+        updateStatsUI();
+    } catch (e) {
+        console.error("Error initializing stats", e);
+    }
+}
+
+async function updateUserStats(xpGain, kpGain, isQuizFinished = false) {
+    if (!state.userStats) return;
+    const isOnline = !!(db && state.user);
+
+    try {
+        const newXP = (state.userStats.totalXP || 0) + xpGain;
+        const newKP = (state.userStats.totalKP || 0) + kpGain;
+        const newLevel = Math.floor(newXP / 500) + 1;
+        const levelUp = newLevel > (state.userStats.level || 1);
+        
+        if (isOnline) {
+            const userDocRef = firebase.firestore.doc(db, 'users', state.user.uid);
+            const updates = {
+                'stats.totalXP': firebase.firestore.increment(xpGain),
+                'stats.totalKP': firebase.firestore.increment(kpGain),
+                'stats.level': newLevel
+            };
+            if (isQuizFinished) updates['stats.quizzesCompleted'] = firebase.firestore.increment(1);
+            await firebase.firestore.updateDoc(userDocRef, updates);
+        }
+
+        // Update local state (always)
+        state.userStats.totalXP = newXP;
+        state.userStats.totalKP = newKP;
+        if (isQuizFinished) state.userStats.quizzesCompleted = (state.userStats.quizzesCompleted || 0) + 1;
+
+        if (!isOnline) {
+            // Save to local storage for guests
+            localStorage.setItem('studybuddy_guest_stats', JSON.stringify(state.userStats));
+        }
+
+        if (levelUp) {
+            state.userStats.level = newLevel;
+            showToast(`🎊 Level Up! You are now Level ${newLevel}!`);
+        }
+        
+        if (xpGain > 0 || kpGain > 0) {
+            let msg = xpGain > 0 ? `+${xpGain} XP` : '';
+            if (kpGain > 0) msg += (msg ? ' & ' : '') + `+${kpGain} KP`;
+            showToast(msg);
+        }
+        
+        updateStatsUI();
+
+        // Topic Mastery Tracking
+        if (kpGain > 0 && isQuizFinished) {
+            const session = state.getCurrentSession();
+            if (session && session.title !== 'New Chat') {
+                const topic = session.title;
+                if (!state.userStats.masteryData) state.userStats.masteryData = {};
+                const mastery = state.userStats.masteryData[topic] || 0;
+                const newMastery = mastery + 1;
+                state.userStats.masteryData[topic] = newMastery;
+
+                if (newMastery === 3) showToast(`🏆 Mastery Achieved: ${topic}!`);
+
+                if (isOnline) {
+                    const userDocRef = firebase.firestore.doc(db, 'users', state.user.uid);
+                    await firebase.firestore.updateDoc(userDocRef, { [`stats.masteryData.${topic}`]: newMastery });
+                } else {
+                    localStorage.setItem('studybuddy_guest_stats', JSON.stringify(state.userStats));
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Error updating stats", e);
+    }
+}
+
+function updateStatsUI() {
+    if (!state.userStats) return;
+    const stats = state.userStats;
+
+    // Always recalculate level directly from XP so it is never stale
+    const currentLevel = Math.floor(stats.totalXP / 500) + 1;
+    stats.level = currentLevel;
+
+    if (DOM.statXP) DOM.statXP.textContent = stats.totalXP;
+    if (DOM.statKP) DOM.statKP.textContent = stats.totalKP;
+    if (DOM.levelBadge) DOM.levelBadge.textContent = `Lvl ${currentLevel}`;
+
+    if (DOM.xpProgressFill) {
+        const xpIntoCurrentLevel = stats.totalXP % 500;
+        const progress = (xpIntoCurrentLevel / 500) * 100;
+        DOM.xpProgressFill.style.width = `${progress}%`;
+    }
+
+    if (DOM.xpNextLevel) {
+        const xpNeeded = 500 - (stats.totalXP % 500);
+        DOM.xpNextLevel.textContent = `${xpNeeded} XP to next level`;
+    }
+}
+
+function showToast(message) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<span>✨</span> <span>${message}</span>`;
+    
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+async function fetchUserHistory() {
+    if (!db || !state.user) return;
+    try {
+        const q = firebase.firestore.query(
+            firebase.firestore.collection(db, 'user_history'),
+            firebase.firestore.where('user_uid', '==', state.user.uid),
+            firebase.firestore.orderBy('timestamp', 'desc')
+        );
+        const querySnapshot = await firebase.firestore.getDocs(q);
+        const history = [];
+        querySnapshot.forEach((doc) => {
+            history.push({ id: doc.id, ...doc.data() });
+        });
+        renderHistoryBoard(history);
+    } catch (e) {
+        console.error("Error fetching history", e);
+    }
+}
+
+function updateUserUI(isLoggedIn) {
+    if (DOM.googleLoginBtn) DOM.googleLoginBtn.style.display = isLoggedIn ? 'none' : 'flex';
+    // Remove the condition that hides stats when not logged in
+    if (DOM.userStatsContainer) DOM.userStatsContainer.style.display = 'block';
+    if (DOM.userInfo) {
+        DOM.userInfo.style.display = isLoggedIn ? 'flex' : 'none';
+        if (isLoggedIn && state.user) {
+            document.getElementById('user-name').textContent = state.user.displayName;
+        }
+    }
+}
+
+function renderHistoryBoard(history) {
+    if (!DOM.historyList) return;
+    DOM.historyList.innerHTML = '';
+    
+    if (history.length === 0) {
+        DOM.historyList.innerHTML = '<div class="empty-history">No history yet.</div>';
+        return;
+    }
+
+    history.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        
+        const isMastered = state.userStats?.masteryData?.[item.topic] >= 3;
+        const masteryBadge = isMastered ? '<span class="history-mastered-badge" title="Topic Mastered">🏆</span>' : '';
+
+        div.innerHTML = `
+            <div class="history-topic">${item.topic}${masteryBadge}</div>
+            <div class="history-date">${item.timestamp?.toDate().toLocaleDateString() || 'Just now'}</div>
+        `;
+        div.onclick = () => {
+            // Load history item into chat as a new session or preview
+            const session = state.createNewSession();
+            state.updateSessionTitle(session.id, "History: " + item.topic);
+            state.addMessageToCurrentSession('user', "I'm reviewing my history about: " + item.topic);
+            state.addMessageToCurrentSession('ai', item.content);
+            loadSessionIntoUI(session);
+            if (typeof renderSessionsList === 'function') renderSessionsList();
+        };
+        DOM.historyList.appendChild(div);
+    });
+}
+
 // --- SECTION A — CONFIG ---
 const CONFIG = {
     GROQ_MODEL: 'llama-3.3-70b-versatile',
-    HF_IMAGE_MODEL: 'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
     SYSTEM_INSTRUCTION: `You are StudyBuddy, a friendly, patient, and highly intelligent AI tutor and study assistant.
 Your primary goal is to help students learn, understand concepts, and succeed in their studies.
 
@@ -41,6 +328,19 @@ class AppState {
             chatConfigured: false,
             imageConfigured: false,
             publicImageFallbackEnabled: false
+        };
+
+        this.user = null; // Firebase user
+
+        // Load stats from local storage for guests
+        const savedStats = localStorage.getItem('studybuddy_guest_stats');
+        this.userStats = savedStats ? JSON.parse(savedStats) : {
+            totalXP: 0,
+            totalKP: 0,
+            questionsAsked: 0,
+            quizzesCompleted: 0,
+            level: 1,
+            masteryData: {}
         };
 
         if (this.sessions.length === 0) {
@@ -344,7 +644,7 @@ async function generateImage(prompt) {
     }
 
     state.abortController = new AbortController();
-    const timeoutId = setTimeout(() => state.abortController.abort(), 90000); // 90s timeout
+    const timeoutId = setTimeout(() => state.abortController.abort(), 90000);
 
     try {
         const response = await fetch('/api/image', {
@@ -362,16 +662,12 @@ async function generateImage(prompt) {
         }
 
         const data = await response.json();
-        if (data.mode === 'unavailable') {
-            if (state.backendStatus.publicImageFallbackEnabled) {
-                if (confirm("Live image generation is not configured. Would you like to use a public fallback? (Your prompt will be sent to pollinations.ai)")) {
-                    return generatePublicFallbackImage(prompt);
-                }
-            }
-            throw new Error(data.message);
+
+        if (data.imageUrl) {
+            return data.imageUrl;
         }
 
-        return data.imageUrl;
+        throw new Error(data.error || 'Image generation failed');
     } catch (error) {
         if (error.name === 'AbortError') throw new Error('Image generation cancelled.');
         throw error;
@@ -485,7 +781,7 @@ function initDOM() {
         messageInput: document.getElementById('message-input'),
         sendBtn: document.getElementById('send-btn'),
         themeToggleBtn: document.getElementById('theme-toggle-btn'),
-        settingsBtn: document.getElementById('settings-btn'),
+        // settingsBtn: document.getElementById('settings-btn'),
         newChatBtn: document.getElementById('new-chat-btn'),
         sessionsList: document.getElementById('sessions-list'),
         settingsModal: document.getElementById('settings-modal'),
@@ -520,7 +816,20 @@ function initDOM() {
         imageStatus: document.getElementById('image-status'),
         appMode: document.getElementById('app-mode'),
         demoBadge: document.getElementById('demo-badge'),
+        googleLoginBtn: document.getElementById('google-login-btn'),
+        userInfo: document.getElementById('user-info'),
+        historyList: document.getElementById('history-list'),
+        userStatsContainer: document.getElementById('user-stats-container'),
+        statXP: document.getElementById('stat-xp'),
+        statKP: document.getElementById('stat-kp'),
+        levelBadge: document.getElementById('level-badge'),
+        xpProgressFill: document.getElementById('xp-progress-fill'),
+        xpNextLevel: document.getElementById('xp-next-level')
     };
+
+    if (DOM.googleLoginBtn) {
+        DOM.googleLoginBtn.onclick = loginWithGoogle;
+    }
 }
 
 // --- SECTION G — UI FUNCTIONS ---
@@ -1281,7 +1590,21 @@ function renderFlashcards(aiResponse) {
     nextBtn.className = 'flashcard-btn';
     nextBtn.textContent = 'Next →';
     nextBtn.onclick = () => {
-        if (currentIndex < cards.length - 1) { currentIndex++; updateCard(); }
+        if (currentIndex < cards.length - 1) { 
+            currentIndex++; 
+            updateCard(); 
+        } else {
+            // Show Finish button
+            if (state.user) {
+                nextBtn.textContent = 'Finish & Earn XP 🏆';
+                nextBtn.classList.add('primary-btn');
+                nextBtn.onclick = () => {
+                    updateUserStats(50, 0); // +50 XP for finishing
+                    nextBtn.textContent = 'Finished! ✅';
+                    nextBtn.disabled = true;
+                };
+            }
+        }
     };
 
     const hint = document.createElement('div');
@@ -1414,7 +1737,7 @@ function renderQuiz(aiResponse) {
         // Detect Question header
         const qMatch = trimmed.match(/^(?:\*\*|)?Q(?:uestion)?\s*(\d+)\s*[:.]\s*(.*)/i);
         // Detect Option
-        const oMatch = trimmed.match(/^(?:\*\*|)?([A-D])[).]\s*(.*)/i);
+        const oMatch = trimmed.match(/^(?:\*\*|)?([A-D])[).]\s*((?:(?!Answer\s*[:.]).)*)/i);
         // Detect Answer
         const aMatch = trimmed.match(/^(?:\*\*|)?(?:Correct\s+)?Answer\s*[:.]\s*([A-D])/i);
         // Detect Explanation
@@ -1425,7 +1748,18 @@ function renderQuiz(aiResponse) {
             if (currentQ && currentQ.text && currentQ.options.length >= 2) questions.push(currentQ);
             currentQ = { id: qMatch[1], text: qMatch[2].replace(/\*\*/g, '').trim(), options: [], answer: '', explanation: '' };
         } else if (oMatch && currentQ) {
-            currentQ.options.push({ letter: oMatch[1].toUpperCase(), text: oMatch[2].replace(/\*\*/g, '').trim() });
+            let optionText = oMatch[2].replace(/\*\*/g, '').trim();
+            const inlineAnswer = optionText.match(/\bAnswer\s*[:.]\s*([A-D])\b/i);
+            if (inlineAnswer) {
+                currentQ.answer = inlineAnswer[1].toUpperCase();
+                optionText = optionText.replace(/\s*\bAnswer\s*[:.]\s*[A-D]\b/i, '').trim();
+            }
+            const inlineExplain = optionText.match(/\bExplanation\s*[:.]\s*(.*)/i);
+            if (inlineExplain) {
+                currentQ.explanation = inlineExplain[1].replace(/\*\*/g, '').trim();
+                optionText = optionText.replace(/\s*\bExplanation\s*[:.].*/i, '').trim();
+            }
+            currentQ.options.push({ letter: oMatch[1].toUpperCase(), text: optionText });
         } else if (aMatch && currentQ) {
             currentQ.answer = aMatch[1].toUpperCase();
         } else if (eMatch && currentQ) {
@@ -1498,11 +1832,14 @@ function renderQuiz(aiResponse) {
                 answered++;
 
                 const isCorrect = option.letter === q.answer;
-                if (isCorrect) score++;
+                if (isCorrect) {
+                    score++;
+                    if (state.user) updateUserStats(0, 15); // +15 KP per correct answer
+                }
 
                 // Mark all options
                 optionsDiv.querySelectorAll('.quiz-option-btn').forEach(btn => {
-                    const btnLetter = btn.textContent[0];
+                    const btnLetter = btn.textContent.trim()[0].toUpperCase();
                     if (btnLetter === q.answer) {
                         btn.classList.add('correct');
                     } else if (btnLetter === option.letter && !isCorrect) {
@@ -1517,7 +1854,6 @@ function renderQuiz(aiResponse) {
                 explanationDiv.textContent = (isCorrect ? '✓ Correct! ' : '✗ Wrong. ') + q.explanation;
                 explanationDiv.classList.add(isCorrect ? 'correct-explanation' : 'incorrect-explanation');
                 questionDiv.appendChild(explanationDiv);
-                scrollToBottom();
 
                 // Show final score if all answered
                 if (answered === questions.length) {
@@ -1527,7 +1863,10 @@ function renderQuiz(aiResponse) {
                     scoreDiv.textContent = '🎯 Final Score: ' + score + '/' + questions.length + ' (' + percent + '%)';
                     scoreDiv.classList.add(percent >= 70 ? 'score-good' : 'score-bad');
                     quizContainer.appendChild(scoreDiv);
-                    scrollToBottom();
+                    
+                    if (state.user) {
+                        updateUserStats(50, 0, true); // +50 XP for finishing quiz
+                    }
                 }
             };
 
@@ -1581,7 +1920,7 @@ ${content}`;
     }
 
     if (type === 'quiz') {
-        return `Generate exactly 5 multiple choice quiz questions about: "${content}".\n\nFormat each question EXACTLY like this:\n\n**Q1:** [question text]\nA) [option]\nB) [option]\nC) [option]\nD) [option]\n**Answer:** [correct letter]\n**Explanation:** [brief explanation]\n\nSeparate each question with a blank line.`;
+        return `Generate exactly 5 multiple choice quiz questions about: "${content}".\n\nFormat each question EXACTLY like this:\n\nQ1: [question text]\nA) [option text only]\nB) [option text only]\nC) [option text only]\nD) [option text only]\nAnswer: [single capital letter only, e.g. A]\nExplanation: [brief explanation]\n\nSTRICT RULES:\n- Each A) B) C) D) line must contain option text ONLY. Never append Answer: to any option line.\n- The Answer line must be on its own separate line containing only a single letter A, B, C, or D.\n- The Explanation line must be on its own separate line.\n- Separate each question with a blank line.\n- Do not use markdown bold (**) anywhere.`;
     }
 
     return null;
@@ -1730,6 +2069,20 @@ async function handleSendMessage() {
             } else {
                 addMessageToUI('ai', aiResponse);
             }
+
+            // Save to Firestore History if logged in
+            if (state.user) {
+                const topic = request.type === 'image' ? `Image: ${request.prompt}` : (state.getCurrentSession()?.title || text);
+                saveToHistory(topic, aiResponse);
+            }
+
+            // Gamification rewards (Always apply to local state)
+            let xp = 10; // Base chat XP
+            let kp = 0;
+            if (request.type === 'image') xp = 20;
+            if (request.type === 'flashcards' || request.type === 'quiz') xp = 50;
+
+            updateUserStats(xp, kp);
         } catch (error) {
             removeElement(typingIndicator);
             addErrorToUI(error.message);
@@ -1764,7 +2117,7 @@ function setupEventListeners() {
         setTheme(isDark ? 'light' : 'dark');
     });
 
-    DOM.settingsBtn.addEventListener('click', () => toggleModal(true));
+    // DOM.settingsBtn.addEventListener('click', () => toggleModal(true));
     DOM.headerSettingsBtn.addEventListener('click', () => toggleModal(true));
     DOM.closeSettingsBtn.addEventListener('click', () => toggleModal(false));
 
@@ -2115,6 +2468,21 @@ async function handleTalkModeMessage(transcript) {
                 addMessageToUI('ai', aiResponse);
                 speakText(aiResponse);
             }
+
+            // Save to Firestore History if logged in
+            if (state.user) {
+                const topic = request.type === 'image' ? `Image: ${request.prompt}` : (state.getCurrentSession()?.title || transcript);
+                saveToHistory(topic, aiResponse);
+            }
+
+            // Gamification rewards (Always apply to local state)
+            let xp = 15; // Voice chat gets a small bonus (+5 XP)
+            let kp = 0;
+            if (request.type === 'image') xp = 25;
+            if (request.type === 'flashcards' || request.type === 'quiz') xp = 60;
+
+            updateUserStats(xp, kp);
+        } catch (error) {
         } catch (error) {
             DOM.talkModeStatus.textContent = 'Error: ' + error.message;
             DOM.talkModeAvatar.className = 'talk-mode-avatar idle';
@@ -2230,6 +2598,7 @@ function setupVoiceListeners() {
 // --- SECTION J — INIT ---
 function init() {
     initDOM();
+    initFirebase();
     renderWelcomePrompts();
     setupMarkdownRenderer();
     initVoiceRecognition();
