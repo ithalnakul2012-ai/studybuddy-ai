@@ -3,10 +3,43 @@
 // Functions are available as firebase.initializeApp, firebase.getAuth, etc.
 
 let firebaseApp, auth, db;
-const googleProvider = new firebase.auth.GoogleAuthProvider();
+let googleProvider = null;
+
+function ensureFirebaseShims() {
+    if (typeof firebase === 'undefined') return;
+
+    // Map modular Auth functions to the legacy-style namespace this app uses.
+    if (!firebase.auth && typeof firebase.getAuth === 'function') {
+        firebase.auth = {
+            GoogleAuthProvider: firebase.GoogleAuthProvider,
+            onAuthStateChanged: firebase.onAuthStateChanged,
+            signInWithPopup: firebase.signInWithPopup
+        };
+    }
+
+    // Map modular Firestore functions to the legacy-style namespace this app uses.
+    if (!firebase.firestore && typeof firebase.getFirestore === 'function') {
+        firebase.firestore = {
+            collection: firebase.collection,
+            addDoc: firebase.addDoc,
+            serverTimestamp: firebase.serverTimestamp,
+            doc: firebase.doc,
+            getDoc: firebase.getDoc,
+            setDoc: firebase.setDoc,
+            updateDoc: firebase.updateDoc,
+            increment: firebase.increment,
+            query: firebase.query,
+            where: firebase.where,
+            orderBy: firebase.orderBy,
+            getDocs: firebase.getDocs
+        };
+    }
+}
 
 async function initFirebase() {
     try {
+        ensureFirebaseShims();
+
         const response = await fetch('/api/config');
         const config = await response.json();
         
@@ -18,8 +51,21 @@ async function initFirebase() {
         }
 
         firebaseApp = firebase.initializeApp(config.firebase);
-        auth = firebase.getAuth(firebaseApp);
-        db = firebase.getFirestore(firebaseApp);
+        auth = typeof firebase.getAuth === 'function'
+            ? firebase.getAuth(firebaseApp)
+            : (typeof firebase.auth === 'function' ? firebase.auth(firebaseApp) : null);
+        db = typeof firebase.getFirestore === 'function'
+            ? firebase.getFirestore(firebaseApp)
+            : (typeof firebase.firestore === 'function' ? firebase.firestore(firebaseApp) : null);
+
+        if (!googleProvider && firebase.auth?.GoogleAuthProvider) {
+            googleProvider = new firebase.auth.GoogleAuthProvider();
+        }
+
+        if (!auth || !firebase.auth?.onAuthStateChanged) {
+            console.warn("Firebase Auth not available. Authentication features disabled.");
+            return;
+        }
 
         firebase.auth.onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -67,6 +113,12 @@ async function initFirebase() {
 
 async function loginWithGoogle() {
     if (!auth) return alert("Firebase not initialized. Check your .env config.");
+    if (!googleProvider && firebase.auth?.GoogleAuthProvider) {
+        googleProvider = new firebase.auth.GoogleAuthProvider();
+    }
+    if (!googleProvider || !firebase.auth?.signInWithPopup) {
+        return alert("Google Sign-In is temporarily unavailable. Check Firebase script loading.");
+    }
     try {
         await firebase.auth.signInWithPopup(auth, googleProvider);
     } catch (error) {
@@ -658,7 +710,9 @@ async function generateImage(prompt) {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
-            throw new Error(error.error || 'Image generation failed');
+            const backendError = error.error || 'Image generation failed';
+            console.warn('Primary image endpoint failed, using public fallback:', backendError);
+            return generatePublicFallbackImage(prompt);
         }
 
         const data = await response.json();
@@ -667,10 +721,16 @@ async function generateImage(prompt) {
             return data.imageUrl;
         }
 
-        throw new Error(data.error || 'Image generation failed');
+        if (data.error) {
+            console.warn('Image API returned error payload, using public fallback:', data.error);
+            return generatePublicFallbackImage(prompt);
+        }
+
+        return generatePublicFallbackImage(prompt);
     } catch (error) {
         if (error.name === 'AbortError') throw new Error('Image generation cancelled.');
-        throw error;
+        console.warn('Image generation request failed, using public fallback:', error.message);
+        return generatePublicFallbackImage(prompt);
     }
 }
 
@@ -2482,7 +2542,6 @@ async function handleTalkModeMessage(transcript) {
             if (request.type === 'flashcards' || request.type === 'quiz') xp = 60;
 
             updateUserStats(xp, kp);
-        } catch (error) {
         } catch (error) {
             DOM.talkModeStatus.textContent = 'Error: ' + error.message;
             DOM.talkModeAvatar.className = 'talk-mode-avatar idle';
