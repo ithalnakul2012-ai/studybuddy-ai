@@ -51,8 +51,12 @@ body {
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
-    padding: 1.25rem;
+    padding: 1rem 0; /* Reduced padding to make room for stats */
     transition: transform 0.3s ease;
+}
+
+.sidebar-header {
+    padding: 0 1rem;
 }
 
 .sidebar-header h2 {
@@ -731,11 +735,27 @@ textarea:focus { outline: none; }
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     background: var(--bg-main);
+    color: var(--text-primary);
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .flashcard-btn:hover, .quiz-option-btn:hover { background: var(--border-color); }
+
+.flashcard-fullscreen-btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--bg-main);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.flashcard-fullscreen-btn:hover {
+    background: var(--border-color);
+}
 
 .flashcard-action-btn {
     background: rgba(99, 102, 241, 0.1);
@@ -911,6 +931,7 @@ textarea:focus { outline: none; }
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     background: var(--bg-main);
+    color: var(--text-primary);
     cursor: pointer;
     font-weight: 600;
     transition: all 0.2s;
@@ -1226,3 +1247,216 @@ textarea:focus { outline: none; }
     animation: breathe 1.5s infinite;
 }
 
+/* Google Auth & User UI */
+.google-btn {
+    background: white;
+    color: #444;
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+}
+
+.google-btn:hover {
+    background: #f8fafc;
+    border-color: var(--text-secondary);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-sidebar);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+#user-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* History Board */
+.sidebar-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 1.5rem 0;
+}
+
+.history-item {
+    padding: 0.75rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-bottom: 0.5rem;
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+
+.history-item:hover {
+    border-color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.history-topic {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-date {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.empty-history {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 1rem;
+    font-style: italic;
+}
+
+.dark-mode .google-btn {
+    background: #1e293b;
+    color: white;
+    border-color: #334155;
+}
+
+/* Gamification & Stats */
+.user-stats-container {
+    padding: 1rem;
+    margin: 0.5rem 1rem 1rem 1rem;
+    background: rgba(99, 102, 241, 0.05);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--bg-main);
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+.stat-label {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+#stat-xp, #stat-kp {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+}
+
+.level-badge {
+    text-align: center;
+    font-weight: 800;
+    font-size: 0.8rem;
+    color: white;
+    background: var(--accent-primary);
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    width: fit-content;
+    margin: 0 auto 0.5rem auto;
+}
+
+.xp-progress-bar {
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.xp-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+    transition: width 0.5s ease-out;
+}
+
+.toast-container {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.toast {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    border-left: 4px solid var(--accent-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    animation: slideInRight 0.3s ease-out, fadeOut 0.3s ease-in 2.7s forwards;
+    min-width: 250px;
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+.history-mastered-badge {
+    margin-left: 0.5rem;
+    color: #f59e0b;
+    font-size: 0.9rem;
+}
+
+.sidebar-action {
+    padding: 0 1rem 1rem 1rem;
+}
+
+.new-chat-btn {
+    width: 100% !important;
+    padding: 0.8rem !important;
+    font-weight: 700 !important;
+    font-size: 0.95rem !important;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)) !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    border: none !important;
+    margin-top: 0.5rem;
+    transition: all 0.2s !important;
+}
+
+.new-chat-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(99, 102, 241, 0.4);
+    opacity: 0.9;
+}
+
+.dark-mode .history-item {
+    background: var(--bg-card);
+    border-color: var(--border-highlight);
+}

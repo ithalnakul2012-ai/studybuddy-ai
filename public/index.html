@@ -19,6 +19,19 @@
     <script src="vendor/purify.min.js"></script>
     <script src="vendor/highlight.min.js"></script>
     <script src="vendor/jspdf.umd.min.js"></script>
+
+    <!-- Firebase SDK -->
+    <script type="text/javascript" src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"></script>
+
+    <!-- Firebase Import Map -->
+    <script type="importmap">
+    {
+      "imports": {
+      }
+    }
+    </script>
 </head>
 <body class="light-mode">
     <div class="app-container">
@@ -27,10 +40,34 @@
             <div class="sidebar-header">
                 <h2>StudyBuddy AI</h2>
             </div>
-            <button id="new-chat-btn" class="btn primary-btn">+ New Chat</button>
-            
+            <div id="user-stats-container" class="user-stats-container" style="display: none;">
+                <div class="stats-grid">
+                    <div class="stat-item" title="Experience Points">
+                        <span class="stat-label">✨ XP</span>
+                        <span id="stat-xp">0</span>
+                    </div>
+                    <div class="stat-item" title="Knowledge Points">
+                        <span class="stat-label">🧠 KP</span>
+                        <span id="stat-kp">0</span>
+                    </div>
+                </div>
+                <div class="level-badge" id="level-badge">Lvl 1</div>
+                <div class="xp-progress-bar">
+                    <div id="xp-progress-fill" class="xp-progress-fill" style="width: 0%;"></div>
+                </div>
+                <div id="xp-next-level" style="text-align: center; font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">500 XP to next level</div>
+            </div>
+
+            <div class="sidebar-action">
+                <button id="new-chat-btn" class="btn primary-btn new-chat-btn">+ New Chat</button>
+            </div>
+
             <div class="sessions-label">Recent Chats</div>
             <div id="sessions-list" class="sessions-list"></div>
+
+            <div class="sidebar-divider"></div>
+            <div class="sessions-label">History Board</div>
+            <div id="history-list" class="sessions-list"></div>
 
             <div class="sidebar-footer">
                 <button id="talk-mode-btn" class="btn icon-btn" title="Talk Mode">
@@ -43,9 +80,6 @@
                 <button id="theme-toggle-btn" class="btn icon-btn" title="Toggle Theme">
                     <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                     <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-                </button>
-                <button id="settings-btn" class="btn icon-btn" title="Settings">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                 </button>
             </div>
         </aside>
@@ -60,6 +94,13 @@
                     <h2>StudyBuddy AI <span id="demo-badge" class="demo-badge" style="display: none;">Demo Mode</span></h2>
                 </div>
                 <div class="header-actions">
+                    <button id="google-login-btn" class="btn primary-btn google-btn">
+                        <svg viewBox="0 0 48 48" width="20" height="20"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
+                        <span>Sign in with Google</span>
+                    </button>
+                    <div id="user-info" class="user-info" style="display: none;">
+                        <span id="user-name"></span>
+                    </div>
                     <button id="header-settings-btn" class="btn icon-btn" title="Settings">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                     </button>
@@ -197,6 +238,8 @@
             </div>
         </div>
     </div>
+
+    <div id="toast-container" class="toast-container"></div>
 
     <!-- Scripts -->
     <script src="js/app.js"></script>
